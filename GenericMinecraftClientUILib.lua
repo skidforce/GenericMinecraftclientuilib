@@ -2501,27 +2501,38 @@ function Window:Notify(opts)
 	toast.BackgroundTransparency = 0.04
 	self:_corner(toast, 0.8)
 	self:_stroke(toast)
+	-- The text lives in `body`, which sizes the toast. The accent bar sits outside the list layout and gets a
+	-- fixed height (a full-height bar inside an auto-sized toast would stretch the toast to the screen height).
+	local body = new("Frame", {
+		Parent = toast,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+	})
 	new("UIPadding", {
 		PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 14),
-		PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 11), Parent = toast,
+		PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 11), Parent = body,
 	})
-	new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = toast })
+	new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = body })
 	local bar = new("Frame", {
 		Parent = toast,
-		Position = UDim2.new(0, -16, 0, 0),
-		Size = UDim2.new(0, 3, 1, 0),
+		Position = UDim2.fromOffset(0, 8),
+		Size = UDim2.fromOffset(3, 24),
 		BackgroundColor3 = color,
 		BorderSizePixel = 0,
 	})
-	bar.LayoutOrder = -1
+	self:_pill(bar)
+	body:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		bar.Size = UDim2.fromOffset(3, math.max(8, body.AbsoluteSize.Y - 16))
+	end)
 	if opts.Title then
 		self:_label({
-			Parent = toast, Text = opts.Title, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 16),
+			Parent = body, Text = opts.Title, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 16),
 		}, "bold")
 	end
 	if opts.Content then
 		self:_label({
-			Parent = toast, Text = opts.Content, TextSize = 12, TextWrapped = true, LayoutOrder = 2,
+			Parent = body, Text = opts.Content, TextSize = 12, TextWrapped = true, LayoutOrder = 2,
 			Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
 			TextYAlignment = Enum.TextYAlignment.Top,
 		}, "dim")
