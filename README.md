@@ -15,7 +15,7 @@ the HUD, notifications and config handling for you.
 - **Settings controls**: Toggle, Slider, Dropdown (single or multi select), Keybind, Textbox, ColorPicker, Button, Label, Separator.
 - **HUD**: watermark, a live module list sorted by width, info lines (FPS and ping built in, add your own).
 - **Notifications** that stack in the corner, and a **player card** with avatar, name and plan badge.
-- **Full theming**: six presets, your own themes, per-token overrides at runtime, a rainbow accent.
+- **Full theming**: seven presets, your own themes, per-token overrides at runtime, a rainbow accent.
 - **Config system**: every setting has a flag; export/import as JSON, optional save/load adapter.
 - **Search** across all modules, **mobile open button**, optional **background blur**, **UI scale**.
 
@@ -127,11 +127,13 @@ Creates a window and returns it. Every option is optional.
 | `Columns` | number | `2` | Columns of module cards per page, 1 to 4 (Window style). |
 | `ShowDescriptions` | boolean | `true` | Show module descriptions on cards (Window style). |
 | `PanelWidth` | number | `220` | Width of each panel (Panels style). |
+| `PanelMaxHeight` | number | `360` | Tallest a panel's module list gets before it scrolls (Panels style). |
 | `Scale` | number | `1` | UI scale, 0.5 to 2. |
 | `Blur` | boolean or number | `false` | Blur the game behind the GUI. A number sets the blur size (default 14). |
 | `Dim` | boolean | `true` | Darken the game behind the GUI. |
 | `DimTransparency` | number | `0.55` | 0 is black, 1 is invisible. |
-| `Plan` | string | `nil` | Plan badge on the player card. `nil` shows "No plan". |
+| `Plan` | string | `nil` | Plan badge on the player card. Leave it out and no badge is shown at all. |
+| `NoPlanText` | string | `nil` | Optional text to show when there is no plan, for example `"Free"`. Leave it out to show nothing. |
 | `PlanColors` | table | built in | `{ PlanName = Color3 }`. Merged over the defaults (Plus, Pro, Premium, Lifetime). |
 | `PlayerCard` | boolean | `true` | Show the player card. |
 | `Watermark` | boolean | `true` | Show the HUD watermark. |
@@ -150,7 +152,7 @@ Creates a window and returns it. Every option is optional.
 | Member | Description |
 |---|---|
 | `Lib.Version`, `Lib.Name` | Version string and library name. |
-| `Lib.Themes` | Table of theme presets: `Ice`, `Ember`, `Orchid`, `Lime`, `Mono`, `Light`. |
+| `Lib.Themes` | Table of theme presets: `Ice`, `Ember`, `Orchid`, `Lime`, `Mono`, `Crimson`, `Light`. |
 | `Lib.DefaultTheme` | Name of the preset used when `Theme` is not given. Defaults to `"Ice"`. |
 | `Lib:RegisterTheme(name, tokens)` | Adds a theme to `Lib.Themes`. Missing tokens are filled from the default theme. |
 | `Lib:GetThemeNames()` | Sorted list of theme names. |
@@ -182,7 +184,7 @@ Creates a window and returns it. Every option is optional.
 | `Window:SetThemeToken(token, value)` | Changes one theme token, for example `("Corner", 8)`. |
 | `Window:SetAccent(color, color2?)` | Changes the accent color. |
 | `Window:SetRainbow(enabled, speed?)` | Turns the rainbow accent on or off. |
-| `Window:SetPlayerCard(info)` | `info = { Name = "Steve", Plan = "Pro", Avatar = userId or "rbxassetid://..." }`. Use `Plan = false` to remove the plan. |
+| `Window:SetPlayerCard(info)` | `info = { Name = "Steve", Plan = "Pro", Avatar = userId or "rbxassetid://..." }`. Use `Plan = false` to remove the plan. `NoPlanText = "Free"` shows text when there is no plan. |
 | `Window:Notify(options)` | Shows a toast. See [Notifications](#notifications). |
 | `Window:GetFlag(flag)` / `Window:SetFlag(flag, value)` | Read or write any value by its flag. |
 | `Window:ExportConfig()` | Returns all values as a JSON string. |
@@ -384,7 +386,7 @@ token restyles everything instantly.
 ### Use a preset
 
 ```lua
-Lib:CreateWindow({ Theme = "Ember" })   -- Ice, Ember, Orchid, Lime, Mono, Light
+Lib:CreateWindow({ Theme = "Ember" })   -- Ice, Ember, Orchid, Lime, Mono, Crimson, Light
 Window:SetTheme("Orchid")
 ```
 
