@@ -29,6 +29,8 @@ local Lib = {
 	Name = "The Generic Minecraft Client UI Lib",
 	Version = "1.0.0",
 	Windows = {},
+	Animations = true, -- turn every animation off with Lib.Animations = false
+	AnimationSpeed = 1, -- 2 = twice as fast, 0.5 = half speed
 }
 
 local Window, Category, Module, Element = {}, {}, {}, {}
@@ -128,7 +130,17 @@ local function new(class, props, children)
 end
 
 local function tween(inst, time, props, style, dir)
-	local t = TweenService:Create(inst, TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+	if not Lib.Animations or Lib.AnimationSpeed <= 0 then
+		for k, v in pairs(props) do
+			inst[k] = v
+		end
+		return nil
+	end
+	local t = TweenService:Create(
+		inst,
+		TweenInfo.new(time / Lib.AnimationSpeed, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out),
+		props
+	)
 	t:Play()
 	return t
 end
@@ -745,15 +757,32 @@ Elements.Dropdown = function(el, W, row, opts)
 		TextSize = 11,
 		TextXAlignment = Enum.TextXAlignment.Center,
 	}, "dim")
-	local list = new("Frame", {
+	local clip = new("Frame", {
+		Name = "OptionsClip",
 		Parent = row,
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Size = UDim2.new(1, 0, 0, 0),
+		LayoutOrder = 2,
+	})
+	local list = new("Frame", {
+		Parent = clip,
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		Visible = false,
-		LayoutOrder = 2,
 	})
 	new("UIListLayout", { Parent = list, Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder })
+	local open = false
+	local function setOpen(v)
+		open = v
+		arrow.Text = v and "^" or "v"
+		tween(clip, 0.22, { Size = UDim2.new(1, 0, 0, v and list.AbsoluteSize.Y or 0) }, Enum.EasingStyle.Quint)
+	end
+	list:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if open then
+			clip.Size = UDim2.new(1, 0, 0, list.AbsoluteSize.Y)
+		end
+	end)
 	local optionButtons = {}
 
 	local function selected(opt)
@@ -815,8 +844,7 @@ Elements.Dropdown = function(el, W, row, opts)
 					el:_commit(nextValue)
 				else
 					el:_commit(opt)
-					list.Visible = false
-					arrow.Text = "v"
+					setOpen(false)
 				end
 			end)
 		end
@@ -856,8 +884,7 @@ Elements.Dropdown = function(el, W, row, opts)
 
 	W._refreshers[el] = paint
 	btn.Activated:Connect(function()
-		list.Visible = not list.Visible
-		arrow.Text = list.Visible and "^" or "v"
+		setOpen(not open)
 	end)
 	rebuild()
 end
@@ -1233,6 +1260,9 @@ function Module:_visual(instant)
 	local T = W.Theme
 	local on = self.Toggleable and self.Enabled
 	local cardColor = on and T.SurfaceAlt:Lerp(T.Accent, 0.14) or T.SurfaceAlt
+	if self._hover then
+		cardColor = cardColor:Lerp(T.Text, 0.05)
+	end
 	local textColor = (on or not self.Toggleable) and T.Text or T.TextDim
 	if instant then
 		self.Card.BackgroundColor3 = cardColor
@@ -1359,6 +1389,14 @@ function Module:_build()
 	end)
 	head.MouseButton2Click:Connect(function()
 		self:SetOpen(not self.Open)
+	end)
+	head.MouseEnter:Connect(function()
+		self._hover = true
+		self:_visual(false)
+	end)
+	head.MouseLeave:Connect(function()
+		self._hover = false
+		self:_visual(false)
 	end)
 	chevron.Activated:Connect(function()
 		self:SetOpen(not self.Open)
@@ -1611,8 +1649,8 @@ end
 
 function Category:SetCollapsed(collapsed)
 	self.Collapsed = collapsed and true or false
-	self.PanelList.Visible = not self.Collapsed
-	self.PanelChevron.Rotation = self.Collapsed and -90 or 0
+	self._fit(true)
+	tween(self.PanelChevron, 0.22, { Rotation = self.Collapsed and -90 or 0 }, Enum.EasingStyle.Quint)
 end
 
 --------------------------------------------------------------------------------
@@ -1830,7 +1868,7 @@ function Window:CreateCategory(name, opts)
 	})
 	self:_bind(plist, "ScrollBarImageColor3", "TextDim")
 	local plistLayout = new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = plist })
-	local function fitPanel()
+	local function fitPanel(animate)
 		local maxH = self.PanelMaxHeight
 		pcall(function()
 			local vh = workspace.CurrentCamera.ViewportSize.Y
@@ -1838,9 +1876,17 @@ function Window:CreateCategory(name, opts)
 				maxH = math.min(maxH, math.max(160, vh - 130))
 			end
 		end)
-		plist.Size = UDim2.new(1, 0, 0, math.min(plistLayout.AbsoluteContentSize.Y + 10, maxH))
+		local target = cat.Collapsed and 0 or math.min(plistLayout.AbsoluteContentSize.Y + 10, maxH)
+		local size = UDim2.new(1, 0, 0, target)
+		if animate then
+			tween(plist, 0.28, { Size = size }, Enum.EasingStyle.Quint)
+		else
+			plist.Size = size
+		end
 	end
-	plistLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fitPanel)
+	plistLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		fitPanel(false)
+	end)
 	new("UIPadding", {
 		PaddingLeft = UDim.new(0, 8),
 		PaddingRight = UDim.new(0, 8),
@@ -1848,6 +1894,8 @@ function Window:CreateCategory(name, opts)
 		Parent = plist,
 	})
 	cat.Panel, cat.PanelList = panel, plist
+	cat._fit = fitPanel
+	cat.PanelScale = new("UIScale", { Scale = 1, Parent = panel })
 	fitPanel()
 	self:_makeDraggable(phead, panel, true)
 	panel.InputBegan:Connect(function(input)
@@ -1897,6 +1945,7 @@ function Window:SelectCategory(cat)
 	if not cat then
 		return
 	end
+	local prev, wasSearching = self._current, self._searching
 	self._current = cat
 	self._searching = false
 	self._searchBox.Text = ""
@@ -1908,6 +1957,11 @@ function Window:SelectCategory(cat)
 	for _, c in ipairs(self.Categories) do
 		self._refreshers[c]()
 	end
+	if Lib.Animations and self.Style == "Window" and prev ~= nil and (prev ~= cat or wasSearching) then
+		cat.Page.Position = UDim2.fromOffset(0, 14)
+		tween(cat.Page, 0.26, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quint)
+	end
+	self:_moveIndicator()
 end
 
 function Window:_updateCounts()
@@ -2011,6 +2065,7 @@ function Window:_applySearch(q)
 	for _, c in ipairs(self.Categories) do
 		self._refreshers[c]()
 	end
+	self:_moveIndicator()
 end
 
 function Window:SetStyle(style)
@@ -2029,12 +2084,72 @@ function Window:SetStyle(style)
 	end
 	self.Results.Page.Visible = false
 	self:_applySearch(self._searchBox.Text)
+	if self.Visible then
+		self:_playOpen()
+	end
 	self.StyleChanged:Fire(style)
 end
 
 --------------------------------------------------------------------------------
 -- Window: visibility, theme, accent, scale
 --------------------------------------------------------------------------------
+
+-- Opening animation: the window pops in, panels pop in one after another.
+function Window:_playOpen()
+	if not Lib.Animations then
+		self._mainScale.Scale = 1
+		for _, c in ipairs(self.Categories) do
+			c.PanelScale.Scale = 1
+		end
+		return
+	end
+	if self.Style == "Window" then
+		self._mainScale.Scale = 0.92
+		tween(self._mainScale, 0.34, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	else
+		self._bar.Position = UDim2.new(0.5, 0, 0, -24)
+		tween(self._bar, 0.32, { Position = UDim2.new(0.5, 0, 0, 16) }, Enum.EasingStyle.Quint)
+		for i, c in ipairs(self.Categories) do
+			c.PanelScale.Scale = 0.86
+			task.delay((i - 1) * 0.035, function()
+				tween(c.PanelScale, 0.34, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			end)
+		end
+	end
+end
+
+function Window:_playClose()
+	if not Lib.Animations then
+		return
+	end
+	if self.Style == "Window" then
+		tween(self._mainScale, 0.16, { Scale = 0.95 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	else
+		for _, c in ipairs(self.Categories) do
+			tween(c.PanelScale, 0.16, { Scale = 0.94 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		end
+	end
+end
+
+-- The accent pill beside the selected sidebar tab glides between tabs.
+function Window:_moveIndicator()
+	local ind = self._tabInd
+	if not ind then
+		return
+	end
+	local cat = self._current
+	if not cat or self._searching then
+		ind.Visible = false
+		return
+	end
+	local y = 58 + 2 + (cat.Index - 1) * 41 + 10
+	if not ind.Visible then
+		ind.Position = UDim2.fromOffset(0, y)
+		ind.Visible = true
+	else
+		tween(ind, 0.28, { Position = UDim2.fromOffset(0, y) }, Enum.EasingStyle.Quint)
+	end
+end
 
 function Window:SetVisible(visible)
 	visible = visible and true or false
@@ -2047,12 +2162,14 @@ function Window:SetVisible(visible)
 	if visible then
 		self.Root.Visible = true
 		self.Dim.BackgroundTransparency = 1
+		self:_playOpen()
 		tween(self.Dim, 0.2, { BackgroundTransparency = self._dimTarget })
 		if self._blur then
 			tween(self._blur, 0.25, { Size = self._blurSize })
 		end
 	else
 		tween(self.Dim, 0.15, { BackgroundTransparency = 1 })
+		self:_playClose()
 		if self._blur then
 			tween(self._blur, 0.2, { Size = 0 })
 		end
@@ -2409,60 +2526,125 @@ function Window:_textWidth(text, size)
 	return #text * 7
 end
 
+function Window:_hudAdd(m)
+	local holder = new("Frame", {
+		Name = m.Name,
+		Parent = self.HudList,
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Size = UDim2.new(0, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.X,
+	})
+	local frame = new("Frame", {
+		Name = "Pill",
+		Parent = holder,
+		Size = UDim2.new(0, 0, 0, 22),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+	})
+	self:_bind(frame, "BackgroundColor3", "Surface")
+	self:_corner(frame, 0.6)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 9), PaddingRight = UDim.new(0, 10), Parent = frame })
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 7),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = frame,
+	})
+	local dot = new("Frame", { Parent = frame, Size = UDim2.fromOffset(6, 6), BorderSizePixel = 0, LayoutOrder = 1, BackgroundTransparency = 1 })
+	self:_pill(dot)
+	local nameLabel = self:_label({
+		Parent = frame, Text = m.Name, TextSize = 13, LayoutOrder = 2, TextTransparency = 1,
+		Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X,
+	})
+	local e = { module = m, holder = holder, frame = frame, dot = dot, nameLabel = nameLabel, order = 0 }
+	tween(holder, 0.24, { Size = UDim2.new(0, 0, 0, 22) }, Enum.EasingStyle.Quint)
+	tween(frame, 0.28, { BackgroundTransparency = 0.12 })
+	tween(dot, 0.28, { BackgroundTransparency = 0 })
+	tween(nameLabel, 0.28, { TextTransparency = 0 })
+	return e
+end
+
+function Window:_hudUpdate(e, suffix)
+	e.nameLabel.Text = e.module.Name
+	e.holder.Name = e.module.Name
+	if suffix ~= "" then
+		if not e.suffixLabel then
+			e.suffixLabel = self:_label({
+				Parent = e.frame, Text = suffix, TextSize = 12, LayoutOrder = 3, TextTransparency = 1,
+				Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X,
+			}, "dim")
+			tween(e.suffixLabel, 0.2, { TextTransparency = 0 })
+		else
+			e.suffixLabel.Text = suffix
+		end
+	elseif e.suffixLabel then
+		e.suffixLabel:Destroy()
+		e.suffixLabel = nil
+	end
+	e.order = -math.floor(self:_textWidth(e.module.Name .. " " .. suffix, 13))
+	e.holder.LayoutOrder = e.order
+end
+
+function Window:_hudRemove(e)
+	local holder = e.holder
+	tween(e.frame, 0.18, { BackgroundTransparency = 1 })
+	tween(e.dot, 0.18, { BackgroundTransparency = 1 })
+	tween(e.nameLabel, 0.18, { TextTransparency = 1 })
+	if e.suffixLabel then
+		tween(e.suffixLabel, 0.18, { TextTransparency = 1 })
+	end
+	tween(holder, 0.24, { Size = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+	task.delay(Lib.Animations and 0.28 or 0, function()
+		holder:Destroy()
+	end)
+end
+
+-- Keeps the HUD module list in sync. Existing entries stay in place, new ones expand in, removed ones fade out.
 function Window:_rebuildHud()
 	if not self.HudList then
 		return
 	end
-	for _, e in ipairs(self._hudEntries) do
-		e.frame:Destroy()
-	end
-	self._hudEntries = {}
-	local items = {}
+	local want, items = {}, {}
 	for _, m in ipairs(self.Modules) do
 		if m.Enabled and m.Toggleable and not m.HideFromList then
 			items[#items + 1] = m
+			want[m] = true
 		end
 	end
-	for i, m in ipairs(items) do
+	local keep, have = {}, {}
+	for _, e in ipairs(self._hudEntries) do
+		if want[e.module] then
+			keep[#keep + 1] = e
+			have[e.module] = e
+		else
+			self:_hudRemove(e)
+		end
+	end
+	for _, m in ipairs(items) do
 		local suffix = m.Suffix
 		if type(suffix) == "function" then
-			local ok, s = pcall(suffix)
-			suffix = ok and s or ""
+			local ok, v = pcall(suffix)
+			suffix = ok and v or ""
 		end
 		suffix = suffix and tostring(suffix) or ""
-		local frame = new("Frame", {
-			Name = m.Name,
-			Parent = self.HudList,
-			Size = UDim2.new(0, 0, 0, 22),
-			AutomaticSize = Enum.AutomaticSize.X,
-			BorderSizePixel = 0,
-			BackgroundTransparency = 0.12,
-			LayoutOrder = -math.floor(self:_textWidth(m.Name .. " " .. suffix, 13)),
-		})
-		self:_bind(frame, "BackgroundColor3", "Surface")
-		self:_corner(frame, 0.6)
-		new("UIPadding", { PaddingLeft = UDim.new(0, 9), PaddingRight = UDim.new(0, 10), Parent = frame })
-		new("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 7),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Parent = frame,
-		})
-		local dot = new("Frame", { Parent = frame, Size = UDim2.fromOffset(6, 6), BorderSizePixel = 0, LayoutOrder = 1 })
-		self:_pill(dot)
-		self:_label({
-			Parent = frame, Text = m.Name, TextSize = 13, LayoutOrder = 2,
-			Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X,
-		})
-		if suffix ~= "" then
-			self:_label({
-				Parent = frame, Text = suffix, TextSize = 12, LayoutOrder = 3,
-				Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X,
-			}, "dim")
+		local e = have[m]
+		if not e then
+			e = self:_hudAdd(m)
+			keep[#keep + 1] = e
+			have[m] = e
 		end
-		self._hudEntries[#self._hudEntries + 1] = { frame = frame, dot = dot, index = i, total = #items }
+		self:_hudUpdate(e, suffix)
 	end
+	table.sort(keep, function(x, y)
+		return x.order < y.order
+	end)
+	for i, e in ipairs(keep) do
+		e.index, e.total = i, #keep
+	end
+	self._hudEntries = keep
 	self._refreshers.hudlist()
 end
 
@@ -2539,9 +2721,21 @@ function Window:Notify(opts)
 	end
 	tween(toast, 0.3, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Back)
 	task.delay(opts.Duration or 3, function()
-		tween(toast, 0.25, { Position = UDim2.new(0, 330, 0, 0) })
-		task.delay(0.3, function()
-			wrap:Destroy()
+		if wrap.Parent == nil then
+			return
+		end
+		tween(toast, 0.25, { Position = UDim2.new(0, 330, 0, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.delay(Lib.Animations and 0.22 or 0, function()
+			if wrap.Parent == nil then
+				return
+			end
+			-- freeze the height, then shrink it so the toasts above and below glide together
+			wrap.AutomaticSize = Enum.AutomaticSize.None
+			wrap.Size = UDim2.new(1, 0, 0, wrap.AbsoluteSize.Y)
+			tween(wrap, 0.2, { Size = UDim2.new(1, 0, 0, 0) }, Enum.EasingStyle.Quint)
+			task.delay(Lib.Animations and 0.22 or 0, function()
+				wrap:Destroy()
+			end)
 		end)
 	end)
 end
@@ -2732,6 +2926,18 @@ function Window:AddInterfaceSettings(name)
 			W:SetScale(v)
 		end,
 	})
+	layout:AddToggle({
+		Name = "Animations", Default = Lib.Animations, CallOnInit = false,
+		Callback = function(v)
+			Lib.Animations = v
+		end,
+	})
+	layout:AddSlider({
+		Name = "Animation speed", Min = 0.5, Max = 2, Step = 0.5, Default = Lib.AnimationSpeed, Suffix = "x", CallOnInit = false,
+		Callback = function(v)
+			Lib.AnimationSpeed = v
+		end,
+	})
 
 	local hud = cat:AddModule({ Name = "HUD", Description = "Choose what shows on screen.", Toggleable = false })
 	hud:AddToggle({ Name = "Watermark", Default = true, Callback = function(v) W.HUD:SetVisible("Watermark", v) end })
@@ -2841,6 +3047,12 @@ function Lib:CreateWindow(opts)
 	W.NotifyOnToggle = opts.NotifyOnToggle ~= false
 	W.ConfigAdapter = opts.ConfigAdapter
 	W.NoPlanText = opts.NoPlanText
+	if opts.Animations ~= nil then
+		Lib.Animations = opts.Animations and true or false
+	end
+	if opts.AnimationSpeed then
+		Lib.AnimationSpeed = opts.AnimationSpeed
+	end
 	W.PlanColors = merge({
 		Plus = Color3.fromRGB(120, 200, 255),
 		Pro = Color3.fromRGB(150, 130, 255),
@@ -2943,6 +3155,7 @@ function Lib:CreateWindow(opts)
 	W:_bind(W.Main, "BackgroundTransparency", "Transparency")
 	W:_corner(W.Main, 1.35)
 	W:_stroke(W.Main)
+	W._mainScale = new("UIScale", { Scale = 1, Parent = W.Main })
 
 	local side = new("Frame", { Name = "Sidebar", Parent = W.Main, Size = UDim2.new(0, 196, 1, 0), BorderSizePixel = 0 })
 	W:_bind(side, "BackgroundColor3", "Background")
@@ -2952,6 +3165,9 @@ function Lib:CreateWindow(opts)
 	})
 	W:_bind(sideLine, "BackgroundColor3", "Stroke")
 	W:_bind(sideLine, "BackgroundTransparency", "StrokeTransparency")
+	W._tabInd = new("Frame", { Name = "TabIndicator", Parent = side, Size = UDim2.fromOffset(3, 18), Position = UDim2.fromOffset(0, 70), BorderSizePixel = 0, Visible = false })
+	W:_bind(W._tabInd, "BackgroundColor3", "Accent")
+	W:_pill(W._tabInd)
 
 	local brand = new("Frame", { Parent = side, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 58) })
 	local logo = new("Frame", { Parent = brand, Position = UDim2.new(0, 18, 0.5, -10), Size = UDim2.fromOffset(20, 20), BorderSizePixel = 0 })
@@ -3065,6 +3281,7 @@ function Lib:CreateWindow(opts)
 		Parent = brandPill, Text = W.Title, TextSize = 14, LayoutOrder = 2,
 		Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X,
 	}, "bold")
+	W._bar = bar
 	W._searchSlotPanels = new("Frame", { Parent = bar, BackgroundTransparency = 1, Size = UDim2.fromOffset(240, 40), LayoutOrder = 2 })
 	if opts.PlayerCard ~= false then
 		local cardHolder = new("Frame", {
