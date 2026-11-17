@@ -423,6 +423,7 @@ function Window:_label(props, kind)
 		Text = "",
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, props))
 	self:_bind(l, "TextColor3", kind == "dim" and "TextDim" or "Text")
 	self:_bind(l, "Font", (kind == "bold" or kind == "title") and "FontBold" or (kind == "mono" and "FontMono" or "Font"))
@@ -829,12 +830,12 @@ Elements.Keybind = function(el, W, row, opts)
 	el.Default = nil
 	el.Pressed = Signal.new()
 	row.Size = UDim2.new(1, 0, 0, 26)
-	W:_label({ Parent = row, Text = el.Name, Size = UDim2.new(1, -100, 1, 0) })
+	W:_label({ Parent = row, Text = el.Name, Size = UDim2.new(1, -84, 1, 0) })
 	local btn = W:_button({
 		Parent = row,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.fromOffset(92, 24),
+		Size = UDim2.fromOffset(76, 24),
 		TextSize = 12,
 	})
 	W:_bind(btn, "Font", "FontMono")
@@ -881,12 +882,12 @@ Elements.Textbox = function(el, W, row, opts)
 	local numeric = opts.Numeric == true
 	el.Default = numeric and 0 or ""
 	row.Size = UDim2.new(1, 0, 0, 26)
-	W:_label({ Parent = row, Text = el.Name, Size = UDim2.new(0.4, 0, 1, 0) })
+	W:_label({ Parent = row, Text = el.Name, Size = UDim2.new(0.46, -4, 1, 0) })
 	local box = new("TextBox", {
 		Parent = row,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.new(0.6, 0, 0, 24),
+		Size = UDim2.new(0.54, 0, 0, 24),
 		Text = "",
 		PlaceholderText = opts.Placeholder or "",
 		ClearTextOnFocus = opts.ClearOnFocus == true,
@@ -1277,7 +1278,7 @@ function Module:_build()
 		Parent = head,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -right, 0.5, 0),
-		Size = UDim2.fromOffset(46, 16),
+		Size = UDim2.fromOffset(56, 16),
 		TextSize = 11,
 		TextXAlignment = Enum.TextXAlignment.Right,
 	}, "mono")
@@ -1286,7 +1287,7 @@ function Module:_build()
 		Name = "Name",
 		Parent = head,
 		Position = UDim2.new(0, 14, 0, 0),
-		Size = UDim2.new(1, -(right + 56), 1, 0),
+		Size = UDim2.new(1, -(right + 14), 1, 0),
 		Text = self.Name,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
@@ -1309,6 +1310,7 @@ function Module:_build()
 		Parent = desc,
 	})
 	self.Card, self.Header, self.Chevron, self.BindTag, self.NameLabel, self.Desc = card, head, chevron, tag, nameLabel, desc
+	self._nameRight = right
 
 	head.Activated:Connect(function()
 		if self.Toggleable then
@@ -1402,6 +1404,7 @@ function Module:SetKeybind(key, silent)
 	key = toKeyCode(key)
 	self.Keybind = key
 	self.BindTag.Text = key and ("[" .. keyName(key) .. "]") or ""
+	self.NameLabel.Size = UDim2.new(1, -(self._nameRight + 14 + (key and 62 or 0)), 1, 0)
 	if self.KeybindElement and self.KeybindElement.Value ~= key then
 		self.KeybindElement:Set(key, true)
 	end
@@ -1623,6 +1626,7 @@ local function buildPage(W, parent, name)
 		Parent = parent,
 	})
 	W:_bind(page, "ScrollBarImageColor3", "TextDim")
+	new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = page })
 	new("UIPadding", {
 		PaddingTop = UDim.new(0, 4),
 		PaddingBottom = UDim.new(0, 18),
@@ -1778,15 +1782,24 @@ function Window:CreateCategory(name, opts)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 3,
 		LayoutOrder = 2,
 	})
 	self:_bind(plist, "ScrollBarImageColor3", "TextDim")
-	new("UISizeConstraint", { MaxSize = Vector2.new(math.huge, 330), Parent = plist })
-	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = plist })
+	local plistLayout = new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = plist })
+	local function fitPanel()
+		local maxH = self.PanelMaxHeight
+		pcall(function()
+			local vh = workspace.CurrentCamera.ViewportSize.Y
+			if type(vh) == "number" then
+				maxH = math.min(maxH, math.max(160, vh - 130))
+			end
+		end)
+		plist.Size = UDim2.new(1, 0, 0, math.min(plistLayout.AbsoluteContentSize.Y + 10, maxH))
+	end
+	plistLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fitPanel)
 	new("UIPadding", {
 		PaddingLeft = UDim.new(0, 8),
 		PaddingRight = UDim.new(0, 8),
@@ -1794,6 +1807,7 @@ function Window:CreateCategory(name, opts)
 		Parent = plist,
 	})
 	cat.Panel, cat.PanelList = panel, plist
+	fitPanel()
 	self:_makeDraggable(phead, panel, true)
 	panel.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -2206,7 +2220,7 @@ function Window:_buildCard(parent, compact)
 		LayoutOrder = 2,
 	}, "bold")
 	self:_pill(ui.Plan)
-	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = ui.Plan })
+	ui.PlanPad = new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = ui.Plan })
 	ui.Frame = frame
 	self._cards[#self._cards + 1] = ui
 	self:_updateCards()
@@ -2227,11 +2241,13 @@ function Window:_updateCards()
 			ui.Image.Visible = false
 		end
 		if plan and plan ~= "" then
+			ui.PlanPad.PaddingLeft, ui.PlanPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
 			ui.Plan.Text = tostring(plan)
 			ui.Plan.BackgroundTransparency = 0
 			ui.Plan.BackgroundColor3 = self.PlanColors[plan] or self.Theme.Accent
 			ui.Plan.TextColor3 = Color3.fromRGB(10, 12, 17)
 		else
+			ui.PlanPad.PaddingLeft, ui.PlanPad.PaddingRight = UDim.new(0, 0), UDim.new(0, 0)
 			ui.Plan.Text = "No plan"
 			ui.Plan.BackgroundTransparency = 1
 			ui.Plan.TextColor3 = self.Theme.TextDim
@@ -2754,6 +2770,7 @@ function Lib:CreateWindow(opts)
 	W.Columns = clamp(opts.Columns or 2, 1, 4)
 	W.ShowDescriptions = opts.ShowDescriptions ~= false
 	W.PanelWidth = opts.PanelWidth or 220
+	W.PanelMaxHeight = opts.PanelMaxHeight or 360
 	W.NotifyOnToggle = opts.NotifyOnToggle ~= false
 	W.ConfigAdapter = opts.ConfigAdapter
 	W.PlanColors = merge({
@@ -2952,7 +2969,7 @@ function Lib:CreateWindow(opts)
 	local bar = new("Frame", {
 		Name = "Bar", Parent = W.PanelsHost, BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 16), Size = UDim2.new(0, 0, 0, 40),
-		AutomaticSize = Enum.AutomaticSize.X,
+		AutomaticSize = Enum.AutomaticSize.X, ZIndex = 100000,
 	})
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center,
