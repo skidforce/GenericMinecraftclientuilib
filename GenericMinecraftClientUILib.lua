@@ -286,17 +286,37 @@ local function makeTheme(accent, accent2, extra)
 end
 
 Lib.Themes = {
-	Ice = makeTheme(Color3.fromRGB(86, 214, 244), Color3.fromRGB(104, 112, 246)),
-	Ember = makeTheme(Color3.fromRGB(255, 122, 76), Color3.fromRGB(255, 76, 130)),
-	Orchid = makeTheme(Color3.fromRGB(196, 112, 255), Color3.fromRGB(110, 120, 255)),
-	Lime = makeTheme(Color3.fromRGB(150, 240, 90), Color3.fromRGB(60, 210, 150)),
-	Mono = makeTheme(Color3.fromRGB(235, 235, 240), Color3.fromRGB(150, 150, 165)),
+	Ice = makeTheme(Color3.fromRGB(86, 214, 244), Color3.fromRGB(104, 112, 246), {
+		Background = Color3.fromRGB(7, 11, 20), Surface = Color3.fromRGB(15, 22, 36), SurfaceAlt = Color3.fromRGB(25, 35, 54),
+		Stroke = Color3.fromRGB(130, 190, 255), StrokeTransparency = 0.84, Corner = 14,
+	}),
+	Ember = makeTheme(Color3.fromRGB(255, 122, 76), Color3.fromRGB(255, 76, 130), {
+		Background = Color3.fromRGB(14, 10, 9), Surface = Color3.fromRGB(27, 19, 17), SurfaceAlt = Color3.fromRGB(43, 30, 26),
+		Stroke = Color3.fromRGB(255, 150, 110), StrokeTransparency = 0.84, Corner = 10,
+	}),
+	Orchid = makeTheme(Color3.fromRGB(196, 112, 255), Color3.fromRGB(110, 120, 255), {
+		Background = Color3.fromRGB(11, 8, 20), Surface = Color3.fromRGB(22, 17, 37), SurfaceAlt = Color3.fromRGB(36, 28, 58),
+		Stroke = Color3.fromRGB(200, 150, 255), StrokeTransparency = 0.84, Corner = 18,
+	}),
+	Lime = makeTheme(Color3.fromRGB(150, 240, 90), Color3.fromRGB(60, 210, 150), {
+		Background = Color3.fromRGB(7, 13, 9), Surface = Color3.fromRGB(15, 26, 18), SurfaceAlt = Color3.fromRGB(24, 41, 29),
+		Stroke = Color3.fromRGB(150, 240, 150), StrokeTransparency = 0.85, Corner = 8,
+	}),
+	Mono = makeTheme(Color3.fromRGB(235, 235, 240), Color3.fromRGB(150, 150, 165), {
+		Background = Color3.fromRGB(9, 9, 9), Surface = Color3.fromRGB(19, 19, 19), SurfaceAlt = Color3.fromRGB(32, 32, 32),
+		Stroke = Color3.fromRGB(255, 255, 255), StrokeTransparency = 0.88, Corner = 4, Transparency = 0,
+	}),
+	Crimson = makeTheme(Color3.fromRGB(230, 45, 60), Color3.fromRGB(255, 110, 80), {
+		Background = Color3.fromRGB(10, 7, 8), Surface = Color3.fromRGB(21, 15, 16), SurfaceAlt = Color3.fromRGB(35, 25, 27),
+		Stroke = Color3.fromRGB(255, 100, 110), StrokeTransparency = 0.84, Corner = 8,
+	}),
 	Light = makeTheme(Color3.fromRGB(34, 120, 255), Color3.fromRGB(120, 80, 255), {
 		Background = Color3.fromRGB(226, 229, 238),
 		Surface = Color3.fromRGB(246, 247, 251),
 		SurfaceAlt = Color3.fromRGB(233, 236, 244),
 		Stroke = Color3.fromRGB(0, 0, 0),
 		StrokeTransparency = 0.88,
+		Corner = 12,
 		Text = Color3.fromRGB(20, 23, 34),
 		TextDim = Color3.fromRGB(99, 108, 130),
 	}),
@@ -341,13 +361,30 @@ end
 function Window:_bind(inst, prop, token, mod)
 	local group = self._binds[token]
 	if not group then
-		group = setmetatable({}, { __mode = "k" })
+		group = {}
 		self._binds[token] = group
 	end
 	local list = group[inst]
 	if not list then
 		list = {}
 		group[inst] = list
+		-- Strong references on purpose: Roblox may collect an Instance wrapper that only a weak table holds,
+		-- which silently drops its theme binding. Entries are removed when the instance is destroyed.
+		local tokens = self._instTokens[inst]
+		if not tokens then
+			tokens = {}
+			self._instTokens[inst] = tokens
+			inst.Destroying:Connect(function()
+				for t in pairs(tokens) do
+					local g = self._binds[t]
+					if g then
+						g[inst] = nil
+					end
+				end
+				self._instTokens[inst] = nil
+			end)
+		end
+		tokens[token] = true
 	end
 	list[#list + 1] = { prop, mod }
 	local value = self.Theme[token]
@@ -431,6 +468,7 @@ function Window:_label(props, kind)
 end
 
 function Window:_gradient(inst)
+	inst.BackgroundColor3 = Color3.new(1, 1, 1)
 	local g = new("UIGradient", { Rotation = 45, Parent = inst })
 	self:_bind(g, "Color", "Accent", function(c, T)
 		return ColorSequence.new(c, T.Accent2)
@@ -1236,7 +1274,7 @@ function Module:_build()
 		Size = UDim2.new(1, 0, 0, 40),
 		LayoutOrder = 1,
 	})
-	local right = 12
+	local right = self.Toggleable and 12 or 8
 	if self.Toggleable then
 		local sw = new("Frame", {
 			Name = "Switch",
@@ -1750,6 +1788,9 @@ function Window:CreateCategory(name, opts)
 	})
 	self:_pill(dot)
 	self:_gradient(dot)
+	local hline = new("Frame", { Parent = phead, Position = UDim2.new(0, 14, 1, -1), Size = UDim2.new(1, -28, 0, 2), BorderSizePixel = 0 })
+	self:_pill(hline)
+	self:_gradient(hline).Rotation = 0
 	self:_label({ Parent = phead, Text = name, Position = UDim2.new(0, 32, 0, 0), Size = UDim2.new(1, -110, 1, 0) }, "bold")
 	cat.PanelCount = self:_label({
 		Parent = phead,
@@ -2222,6 +2263,7 @@ function Window:_buildCard(parent, compact)
 	self:_pill(ui.Plan)
 	ui.PlanPad = new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = ui.Plan })
 	ui.Frame = frame
+	ui.Compact = compact
 	self._cards[#self._cards + 1] = ui
 	self:_updateCards()
 	return ui
@@ -2242,15 +2284,26 @@ function Window:_updateCards()
 		end
 		if plan and plan ~= "" then
 			ui.PlanPad.PaddingLeft, ui.PlanPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+			ui.Plan.Visible = true
 			ui.Plan.Text = tostring(plan)
 			ui.Plan.BackgroundTransparency = 0
 			ui.Plan.BackgroundColor3 = self.PlanColors[plan] or self.Theme.Accent
 			ui.Plan.TextColor3 = Color3.fromRGB(10, 12, 17)
 		else
+			local fallback = self.NoPlanText
 			ui.PlanPad.PaddingLeft, ui.PlanPad.PaddingRight = UDim.new(0, 0), UDim.new(0, 0)
-			ui.Plan.Text = "No plan"
-			ui.Plan.BackgroundTransparency = 1
-			ui.Plan.TextColor3 = self.Theme.TextDim
+			if fallback and fallback ~= "" then
+				ui.Plan.Visible = true
+				ui.Plan.Text = tostring(fallback)
+				ui.Plan.BackgroundTransparency = 1
+				ui.Plan.TextColor3 = self.Theme.TextDim
+			else
+				ui.Plan.Visible = false
+			end
+		end
+		if not ui.Compact then
+			-- no plan line: center the name vertically in the card
+			ui.Name.Position = ui.Plan.Visible and UDim2.fromOffset(58, 10) or UDim2.fromOffset(58, 21)
 		end
 	end
 end
@@ -2261,6 +2314,9 @@ function Window:SetPlayerCard(info)
 	self.PlayerInfo = merge(self.PlayerInfo or {}, info)
 	if info.Plan == false then
 		self.PlayerInfo.Plan = nil
+	end
+	if info.NoPlanText ~= nil then
+		self.NoPlanText = (info.NoPlanText ~= false) and info.NoPlanText or nil
 	end
 	local avatar = info.Avatar
 	if type(avatar) == "string" then
@@ -2773,6 +2829,7 @@ function Lib:CreateWindow(opts)
 	W.PanelMaxHeight = opts.PanelMaxHeight or 360
 	W.NotifyOnToggle = opts.NotifyOnToggle ~= false
 	W.ConfigAdapter = opts.ConfigAdapter
+	W.NoPlanText = opts.NoPlanText
 	W.PlanColors = merge({
 		Plus = Color3.fromRGB(120, 200, 255),
 		Pro = Color3.fromRGB(150, 130, 255),
@@ -2786,6 +2843,7 @@ function Lib:CreateWindow(opts)
 	W.StyleChanged = Signal.new()
 	W.FlagChanged = Signal.new()
 	W._binds, W._refreshers, W._conns = {}, {}, {}
+	W._instTokens = {}
 	W._elements, W._flagObjs, W._usedFlags = {}, {}, {}
 	W._keyElements, W._cards, W._infoLines, W._hudEntries = {}, {}, {}, {}
 	W._z, W._notifCount = 10, 0
